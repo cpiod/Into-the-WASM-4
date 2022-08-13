@@ -1,5 +1,4 @@
 use crate::wasm4::*;
-use crate::*;
 
 const MAP_RENDER_DX: i32 = 2;
 const MAP_RENDER_DY: i32 = 50;
@@ -23,7 +22,7 @@ pub fn board_to_screen(x: u8, y: u8) -> (i32, i32) {
     (12*(x+y)+MAP_RENDER_DX, 9*(y-x)+MAP_RENDER_DY)
 }
 
-pub fn screen_to_board(mx: i32, my: i32) -> Option<(i32, i32)> {
+pub fn screen_to_board(mx: i32, my: i32) -> Option<(u8, u8)> {
     let mut closest = None;
     let mut min_dist = 13;
     for x in 0usize..6 {
@@ -33,20 +32,11 @@ pub fn screen_to_board(mx: i32, my: i32) -> Option<(i32, i32)> {
             let my = my - sy - 9;
             if mx.abs() + my.abs() < min_dist {
                 min_dist = mx.abs() + my.abs();
-                closest = Some((sx,sy));
+                closest = Some((x as u8,y as u8));
             }
         }
     }
     closest
-
-}
-
-pub unsafe fn update_clicks() -> (bool, bool){
-    let previous = PREVIOUS_MOUSE;
-    let buttons = *MOUSE_BUTTONS;
-    let pressed_this_frame = buttons & (buttons ^ previous);
-    PREVIOUS_MOUSE = buttons;
-    ((pressed_this_frame & MOUSE_LEFT) != 0, (pressed_this_frame & MOUSE_RIGHT) != 0)
 }
 
 pub unsafe fn print_number(n: i32, x: i32, y: i32) { // use the current DRAW_COLORS
