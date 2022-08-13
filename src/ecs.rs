@@ -216,10 +216,20 @@ impl World {
         index
     }
 
+    pub fn update_pos(&mut self, e: Entity, x: u8, y: u8) {
+        if let Some(pos) = &mut self.position_components[e] {
+            pos.x = x;
+            pos.y = y;
+        }
+    }
+
     pub fn spawn_mech(&mut self, t: MechTyp, x: u8, y: u8) -> Entity {
         let e = self.new_entity();
         self.with_spr(e, t.get_sprites());
         self.with_hp(e, t.get_hp() );
+        if t.does_float() {
+            self.with_float(e);
+        }
         self.with_mech(e, Mech { typ: t });
         self.with_pos(e, Position { x: x, y: y });
         e
@@ -229,6 +239,9 @@ impl World {
         let e = self.new_entity();
         self.with_spr(e, t.get_sprites());
         self.with_hp(e, t.get_hp() );
+        if t.does_float() {
+            self.with_float(e);
+        }
         self.with_vek(e, Vek { typ: t});
         self.with_pos(e, Position { x: x, y: y });
         e
@@ -324,8 +337,7 @@ impl World {
         } else {
             if self.is_mech(e) {
                 for index in 0..ENTITY_MAX_NUMBER {
-                    // if let (Some(pos), Some(_)) = (&self.position_components[index], &self.vek_components[index]) {
-                    if let Some(pos) = &self.position_components[index] {
+                    if let (Some(pos), Some(_)) = (&self.position_components[index], &self.vek_components[index]) {
                         if pos.x == x && pos.y == y {
                             return false;
                         }
@@ -375,12 +387,35 @@ impl World {
         output
     }
 
-    pub fn get_path_to(&self, e: Entity, dst_x: i32, dst_y: i32) {
-        
+    pub fn is_occupied(&self, x: u8, y: u8) -> bool {
+        for index in 0..ENTITY_MAX_NUMBER {
+            if let Some(pos) = &self.position_components[index] {
+                if pos.x == x && pos.y == y {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
-    fn _get_path_to(&self, start_x: i32, start_y: i32, visited: [[bool; 6]; 6], end: impl Fn(i32, i32, Entity) -> bool) {
-        
+    pub fn get_path_to<'a>(&self, e: Entity, x: u8, y: u8, path: &'a mut [(u8,u8); 36], pf: [[Option<Direction>;8];8]) -> &'a[(u8,u8)]
+    {
+        let mut cx = x as i32;
+        let mut cy = y as i32;
+        let mut index = 36;
+        if let Some(pos) = &self.position_components[e] {
+            while let Some(dir) = pf[cx as usize][cy as usize] {
+                index -= 1;
+                path[index] = (cx as u8,cy as u8);
+                let xy = dir.get_x_y();
+                cx -= xy.0;
+                cy -= xy.1;
+                if cx == pos.x as i32 && cy == pos.y as i32 {
+                    break
+                }
+            }
+        }
+        &path[index..]
     }
 
     // SYSTEMS
@@ -416,12 +451,27 @@ impl World {
         }
     }
 
-    pub unsafe fn sys_render_chars(&self) {
+    unsafe fn render_one_char(&self, index: Entity, pos: &Position, spr: &Sprites) {
+        let (sx,mut sy) = board_to_screen(pos.x, pos.y);
+        if self.float_components[index].is_some() {
+            sy -= 2
+        } else if self.map.is_water(pos.x, pos.y) {
+            sy += 4
+        }
+        blit_sub(&CHARS, sx+5, sy-5, SPRITE_WIDTH, SPRITE_HEIGHT, spr.x as u32, spr.y as u32, CHARS_WIDTH, CHARS_FLAGS);
+    }
+
+    pub unsafe fn sys_render_chars(&self, anim: &Option<MovingAnimation>) {
         *DRAW_COLORS = 0x4310;
         for index in 0..ENTITY_MAX_NUMBER {
             if let (Some(pos), Some(spr)) = (&self.position_components[index], &self.sprites_components[index]) {
-                let (sx,sy) = board_to_screen(pos.x, pos.y);
-                blit_sub(&CHARS, sx+5, sy-5, SPRITE_WIDTH, SPRITE_HEIGHT, spr.x as u32, spr.y as u32, CHARS_WIDTH, CHARS_FLAGS);
+                match anim {
+                    Some(anim) if anim.e == index => {
+                        let pos = &anim.get_position();
+                        self.render_one_char(index, &Position { x: pos.0, y: pos.1 }, spr)
+                    },
+                    _ => self.render_one_char(index, pos, spr)
+                }
             }
         }
     }

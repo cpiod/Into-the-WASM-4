@@ -66,6 +66,10 @@ impl Map {
         self.map[y as usize][x as usize].can_vek_go()
     }
 
+    pub fn is_water(&self, x: u8, y: u8) -> bool {
+        matches!(self.map[y as usize][x as usize], TileType::Water)
+    }
+
     pub fn new(id: usize) -> Self {
         Map { map : MAP[id], is_minimap: false, animation: MapAnimation::NoAnimation }
     }

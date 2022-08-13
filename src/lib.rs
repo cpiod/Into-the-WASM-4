@@ -36,7 +36,7 @@ unsafe fn start() {
     // ];
     let mut world = World::new();
     world.load_map(0);
-    world.spawn_mech(MechTyp::Prime,1,3);
+    world.spawn_mech(MechTyp::Prime,5,5);
     world.spawn_mech(MechTyp::Science,3,5);
     world.spawn_mech(MechTyp::Brute,0,4);
     world.spawn_mech(MechTyp::Ranged,0,1);
@@ -73,6 +73,33 @@ static mut PREVIOUS_MOUSE: u8 = 0;
 static mut FRAME_NUMBER: u32 = 0;
 static mut SELECTED_ENTITY: Option<Entity> = None;
 static mut PATHFINDING_MAP: [[Option<Direction>;8];8] = [[None; 8]; 8];
+static mut MOVING_ANIMATION: Option<MovingAnimation> = None;
+static mut PATH: [(u8,u8);36] = [(0,0); 36];
+
+struct MovingAnimation {
+    e: Entity,
+    time: i32,
+    path: &'static [(u8,u8)]
+}
+
+impl MovingAnimation {
+    fn update(&mut self) {
+        self.time += 1;
+    }
+
+    fn get_position(&self) -> (u8,u8) {
+        self.path[(self.time/10) as usize]
+    }
+
+    fn get_last_position(&self) -> (u8,u8) {
+        self.path[self.path.len()-1]
+    }
+
+    fn should_destroy(&self) -> bool {
+        (self.time/10) as usize >= self.path.len()
+    }
+
+}
 
 unsafe fn update_clicks() -> (bool, bool){
     let previous = PREVIOUS_MOUSE;
@@ -106,15 +133,32 @@ unsafe fn update() {
                 if let Some(current_e) = world.get_mech_at(mouse_xy) {
                     SELECTED_ENTITY = Some(current_e);
                     PATHFINDING_MAP = world.do_pathfinding(current_e, 5);
+                } else if SELECTED_ENTITY.is_some() {
+                    if PATHFINDING_MAP[mouse_xy.0 as usize][mouse_xy.1 as usize].is_none() {
+                        SELECTED_ENTITY = None;
+                        PATHFINDING_MAP = [[None; 8]; 8];
+                    }
+                    else {
+                        let e = unwrap_abort(SELECTED_ENTITY);
+                        let p = world.get_path_to(e, mouse_xy.0, mouse_xy.1, &mut PATH, PATHFINDING_MAP);
+                        MOVING_ANIMATION = Some( MovingAnimation { e: e, time: 0, path: p });
+                        PATHFINDING_MAP = [[None; 8]; 8];
+                    }
                 }
             }
+        } else if right_click {
+            if SELECTED_ENTITY.is_some() {
+                SELECTED_ENTITY = None;
+                PATHFINDING_MAP = [[None; 8]; 8];
+            }
+
         }
         let btn = Button::new(1,1,"Undo",0x0012,0x0021,undo);
         btn.draw();
         draw_ui();
         world.sys_render_atks();
         hilite_mouse(mouse_sxy);
-        world.sys_render_chars();
+        world.sys_render_chars(&mut MOVING_ANIMATION);
         world.render_pathfinding(PATHFINDING_MAP);
         // world.sys_render_hp();
         *DRAW_COLORS = 0x0012;
@@ -125,6 +169,19 @@ unsafe fn update() {
             let mut m = world.get_map();
             m.destroy_tile(4,4);
             m.start_appearing();
+        }
+
+        let mut animation_ended = false;
+        if let Some(anim) = &mut MOVING_ANIMATION {
+            anim.update();
+            animation_ended = anim.should_destroy();
+            if animation_ended {
+                let (x,y) = anim.get_last_position();
+                world.update_pos(anim.e, x, y);
+            }
+        }
+        if animation_ended {
+            MOVING_ANIMATION = None;
         }
     }
 }
