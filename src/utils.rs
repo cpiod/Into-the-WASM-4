@@ -16,6 +16,11 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
+#[inline]
+pub fn is_in_board(xy: i32) -> bool {
+    xy >= 0 && xy < 6
+}
+
 pub fn board_to_screen(x: u8, y: u8) -> (i32, i32) {
     let x = x as i32;
     let y = y as i32;

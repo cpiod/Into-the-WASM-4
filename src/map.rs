@@ -13,6 +13,13 @@ enum TileType {
 }
 
 impl TileType {
+    fn can_float_go(&self) -> bool {
+        match &self {
+            TileType::Dirt | TileType::Water | TileType::NoTile => true,
+            _ => false
+        }
+    }
+ 
     fn can_mech_go(&self) -> bool {
         match &self {
             TileType::Dirt | TileType::Water => true,
@@ -66,6 +73,11 @@ impl Map {
         self.map[y as usize][x as usize].can_vek_go()
     }
 
+    pub fn can_float_go(&self, x: u8, y: u8) -> bool {
+        self.map[y as usize][x as usize].can_float_go()
+    }
+
+
     pub fn is_water(&self, x: u8, y: u8) -> bool {
         matches!(self.map[y as usize][x as usize], TileType::Water)
     }
@@ -75,7 +87,7 @@ impl Map {
     }
 
     pub unsafe fn render_minimap(id: usize) {
-        Map { map : MINIMAP[id], is_minimap: true, animation: MapAnimation::NoAnimation }.render();
+        Map { map : MINIMAP[id], is_minimap: true, animation: MapAnimation::NoAnimation }.render([[false;6];6],None);
     }
 
     pub fn start_appearing(&mut self) {
@@ -99,11 +111,10 @@ impl Map {
         }
     }
 
-    pub unsafe fn render(&mut self) -> Option<(i32,i32)> {
+    pub unsafe fn render(&mut self, pf: [[bool;6];6], targets: Option<[[bool;6];6]>) -> Option<(i32,i32,u8,u8)> {
         if matches!(self.animation, MapAnimation::Hidden) {
             return None
         }
-        *DRAW_COLORS = 0x0021;
         let mx=*MOUSE_X as i32;
         let my=*MOUSE_Y as i32;
         let mut closest = None;
@@ -120,6 +131,17 @@ impl Map {
                     let (sx, mut sy) = board_to_screen(x as u8,y as u8);
                     sy += dy;
                     let n = self.map[y as usize][x as usize];
+                    let targetable = if let Some(t) = targets {
+                        t[x as usize][y as usize]
+                    } else { false };
+                    if targetable {
+                        *DRAW_COLORS = 0x4021;
+                    }
+                    else if pf[x as usize][y as usize] {
+                        *DRAW_COLORS = 0x3021;
+                    } else {
+                        *DRAW_COLORS = 0x1021;
+                    }
                     match n {
                         TileType::Water => {
                             sy+=4;
@@ -137,7 +159,7 @@ impl Map {
                     let dist = (mx - sx - 12).abs() + (my - sy - 9).abs();
                     if dist < min_dist {
                         min_dist = dist;
-                        closest = Some((sx,sy));
+                        closest = Some((sx,sy,x as u8,y as u8));
                     }
                 }
             }
